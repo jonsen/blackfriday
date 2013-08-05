@@ -19,10 +19,21 @@ import (
 	"bytes"
 )
 
+// The flag for Latex
+const (
+    LATEX_CLASS_ARTICLE = 1 << iota
+    LATEX_CLASS_APPENDIX
+    LATEX_CLASS_CHAPTER
+    LATEX_CLASS_GLOSSARY
+    LATEX_CLASS_PREFACE
+)
+
 // Latex is a type that implements the Renderer interface for LaTeX output.
 //
 // Do not create this directly, instead use the LatexRenderer function.
 type Latex struct {
+    flags    int    // LATEX_* options
+    title    string // document title
 }
 
 // LatexRenderer creates and configures a Latex object, which
@@ -30,8 +41,11 @@ type Latex struct {
 //
 // flags is a set of LATEX_* options ORed together (currently no such options
 // are defined).
-func LatexRenderer(flags int) Renderer {
-	return &Latex{}
+func LatexRenderer(flags int, title string) Renderer {
+	return &Latex{
+        flags:    flags,
+        title:    title,
+    }
 }
 
 // render code chunks using verbatim, or listings if we have a language
@@ -67,20 +81,40 @@ func (options *Latex) BlockHtml(out *bytes.Buffer, text []byte) {
 func (options *Latex) Header(out *bytes.Buffer, text func() bool, level int) {
 	marker := out.Len()
 
-	switch level {
-	case 1:
-		out.WriteString("\n\\section{")
-	case 2:
-		out.WriteString("\n\\subsection{")
-	case 3:
-		out.WriteString("\n\\subsubsection{")
-	case 4:
-		out.WriteString("\n\\paragraph{")
-	case 5:
-		out.WriteString("\n\\subparagraph{")
-	case 6:
-		out.WriteString("\n\\textbf{")
-	}
+    if options.flags&LATEX_CLASS_ARTICLE != 0 {
+        switch level {
+        case 1:
+            out.WriteString("\n\\section{")
+        case 2:
+            out.WriteString("\n\\subsection{")
+        case 3:
+            out.WriteString("\n\\subsubsection{")
+        case 4:
+            out.WriteString("\n\\paragraph{")
+        case 5:
+            out.WriteString("\n\\subparagraph{")
+        case 6:
+            out.WriteString("\n\\textbf{")
+        }
+    } else {
+        switch level {
+        case 1:
+            out.WriteString("\n\\chapter{")
+        case 2:
+            out.WriteString("\n\\section{")
+        case 3:
+            out.WriteString("\n\\subsection{")
+        case 4:
+            out.WriteString("\n\\subsubsection{")
+        case 5:
+            out.WriteString("\n\\paragraph{")
+        case 6:
+            out.WriteString("\n\\subparagraph{")
+        case 7:
+            out.WriteString("\n\\textbf{")
+        }
+    }
+
 	if !text() {
 		out.Truncate(marker)
 		return
@@ -244,7 +278,7 @@ func (options *Latex) FootnoteRef(out *bytes.Buffer, ref []byte, id int) {
 }
 
 func needsBackslash(c byte) bool {
-	for _, r := range []byte("_{}%$&\\~") {
+	for _, r := range []byte("_{}%$&\\~#") {
 		if c == r {
 			return true
 		}
@@ -282,8 +316,7 @@ func (options *Latex) NormalText(out *bytes.Buffer, text []byte) {
 	escapeSpecialChars(out, text)
 }
 
-// header and footer
-func (options *Latex) DocumentHeader(out *bytes.Buffer) {
+func classArticleHeader(out *bytes.Buffer) {
 	out.WriteString("\\documentclass{article}\n")
 	out.WriteString("\n")
 	out.WriteString("\\usepackage{graphicx}\n")
@@ -310,8 +343,25 @@ func (options *Latex) DocumentHeader(out *bytes.Buffer) {
 	out.WriteString("\\parindent=0pt\n")
 	out.WriteString("\n")
 	out.WriteString("\\begin{document}\n")
+
+}
+
+func classBookHeader(out *bytes.Buffer, title string) {
+    out.WriteString("\\chapter{" + title + "}\n")
+}
+
+
+// header and footer
+func (options *Latex) DocumentHeader(out *bytes.Buffer) {
+    if options.flags&LATEX_CLASS_ARTICLE != 0 {
+        classArticleHeader(out)
+    } else {
+        //classBookHeader(out, options.title)
+    }
 }
 
 func (options *Latex) DocumentFooter(out *bytes.Buffer) {
-	out.WriteString("\n\\end{document}\n")
+    if options.flags&LATEX_CLASS_ARTICLE != 0 {
+        out.WriteString("\n\\end{document}\n")
+    }
 }
